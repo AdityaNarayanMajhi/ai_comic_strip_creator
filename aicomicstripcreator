@@ -1,0 +1,31 @@
+!cd /content/
+!git clone https://github.com/huggingface/diffusers.git
+!pip install ./diffusers
+!pip install -U -r /content/diffusers/examples/text_to_image/requirements.txt
+
+
+from diffusers import StableDiffusionPipeline
+import torch
+
+# Stable Diffusion V1
+model_path = "CompVis/stable-diffusion-v1-2"
+pipe = StableDiffusionPipeline.from_pretrained(model_path, torch_dtype=torch.float16)
+pipe.to("cuda")
+
+image = pipe(prompt="Dilbert and Dogbert are sitting at the dining table. \
+Dilbert is holding a laptop while Dogbert is looking over his shoulder.").images[0]
+
+image.save("dilbert_panel_v1-2.png")
+image    
+
+
+# Stable Diffusion V2
+model_path = "stabilityai/stable-diffusion-2-1-base"
+pipe = StableDiffusionPipeline.from_pretrained(model_path, torch_dtype=torch.float16)
+pipe.to("cuda")
+
+image = pipe(prompt="Dilbert and Dogbert are sitting at the dining table. \
+Dilbert is holding a laptop while Dogbert is looking over his shoulder.").images[0]
+
+image.save("dilbert_panel_v2-1.png")
+image
