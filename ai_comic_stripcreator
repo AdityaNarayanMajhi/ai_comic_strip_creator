@@ -1,0 +1,89 @@
+!cd /content/
+!git clone https://github.com/huggingface/diffusers.git
+!pip install ./diffusers
+!pip install -U -r /content/diffusers/examples/text_to_image/requirements.txt
+
+!accelerate config default --mixed_precision fp16
+
+!pip install mlflow
+
+import os
+import random
+import getpass
+
+os.environ['MODEL_NAME'] = f'CompVis/stable-diffusion-v1-2'
+os.environ['DATASET_NAME'] = f'Ali-fb/dilbert-comic-sample-dataset'
+os.environ['OUTPUT_DIR'] = f'dilbert-comic-model-v1-2_400'
+
+os.environ['MLFLOW_TRACKING_URI'] = f'https://dagshub.com/Ali-SC/DCIG.mlflow'
+os.environ['MLFLOW_TRACKING_USERNAME'] = f'Ali-SC'
+os.environ['MLFLOW_TRACKING_PASSWORD'] = getpass.getpass('Please enter your DAGsHub token or password: ')
+os.environ['MLFLOW_TRACKING_TOKEN'] = getpass.getpass('Please enter your DAGsHub token or password: ')
+os.environ['MLFLOW_EXPERIMENT_NAME'] = f'exp_'+str(int(1e20*random.random()))
+
+
+
+from huggingface_hub import notebook_login
+notebook_login()
+
+
+
+!accelerate launch diffusers/examples/text_to_image/train_text_to_image.py \
+  --report_to="mlflow" \
+  --pretrained_model_name_or_path=$MODEL_NAME \
+  --dataset_name=$DATASET_NAME \
+  --use_ema \
+  --resolution=512 --center_crop --random_flip \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=4 \
+  --gradient_checkpointing \
+  --mixed_precision="fp16" \
+  --max_train_steps=400 \
+  --learning_rate=1e-05 \
+  --max_grad_norm=1 \
+  --hub_token=******************************* \
+  --push_to_hub \
+  --checkpointing_steps=100000 \
+  --lr_scheduler="constant" \
+  --lr_warmup_steps=0 \
+  --output_dir=$OUTPUT_DIR 
+
+
+
+# Stable Diffusion V1
+from diffusers import StableDiffusionPipeline
+import torch
+from PIL import Image
+
+model_path = "./dilbert-comic-model-v1-2"
+pipe = StableDiffusionPipeline.from_pretrained(model_path, torch_dtype=torch.float16)
+pipe.to("cuda")
+
+# Run inference using ChatGPT prompts to acquire 4 image panels
+image1 = pipe(prompt="Dilbert and Dogbert are sitting at the dining table. Dilbert is holding a laptop while Dogbert is looking over his shoulder.").images[0]
+image1.save("dilbert_sd1_panel_1.png")
+
+image2 = pipe(prompt="Dilbert is sitting at his desk at work, staring at the computer screen. His co-workers are gathered around, looking over his shoulder.").images[0]
+image2.save("dilbert_sd1_panel_2.png")
+
+image3 = pipe(prompt="Dilbert's AI is sitting at his desk, staring at the computer screen. Dilbert and his co-workers are gathered around, looking over its shoulder.").images[0]
+image3.save("dilbert_sd1_panel_3.png")
+
+image4 = pipe(prompt="Dilbert is sitting at home, unemployed, while the AI is sitting at his old desk at work. Dilbert's co-workers are gathered around, looking over the AI's shoulder.").images[0]
+image4.save("dilbert_sd1_panel_4.png")
+
+# Image grid helper function from HuggingFace
+def image_grid(imgs, rows, cols):
+    assert len(imgs) == rows*cols
+
+    w, h = imgs[0].size
+    grid = Image.new('RGB', size=(cols*w, rows*h))
+    grid_w, grid_h = grid.size
+    
+    for i, img in enumerate(imgs):
+        grid.paste(img, box=(i%cols*w, i//cols*h))
+    return grid
+
+all_images = [image1, image2, image3, image4]
+grid = image_grid(all_images, rows=1, cols=4)
+grid
