@@ -1,0 +1,70 @@
+#  pip install torch torchvision torchaudio diffusers transformers accelerate pillow
+import os
+import textwrap
+from PIL import Image, ImageDraw, ImageFont
+from transformers import pipeline
+from diffusers import StableDiffusionPipeline
+import torch
+
+# Load text generator (GPT-2)
+text_generator = pipeline("text-generation", model="gpt2")
+
+# Load Stable Diffusion for image generation
+device = "cuda" if torch.cuda.is_available() else "cpu"
+image_generator = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to(device)
+
+def generate_comic_description(scenario):
+    """Generates a comic panel description and dialogue using GPT-2."""
+    prompt = f"Generate a simple comic scene: {scenario}. Include 1-2 panels with short English dialogues."
+    response = text_generator(prompt, max_length=100, do_sample=True)[0]["generated_text"]
+    
+    panels = []
+    for line in response.split("\n"):
+        if "|" in line:
+            desc, dialogue = line.split("|")
+            panels.append((desc.strip(), dialogue.strip()))
+        else:
+            panels.append((line.strip(), ""))
+    return panels
+
+def generate_comic_image(description):
+    """Generates a comic-style image using Stable Diffusion."""
+    image = image_generator(description).images[0]
+    return image
+
+def add_dialogue_to_image(image, dialogue, output_path):
+    """Adds dialogue text to the image."""
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+    
+    wrapped_text = textwrap.fill(dialogue, width=40)
+    
+    # Draw a speech bubble
+    bubble_x, bubble_y = 50, 50
+    bubble_width, bubble_height = 400, 100
+    draw.rectangle([bubble_x, bubble_y, bubble_x + bubble_width, bubble_y + bubble_height], fill="white", outline="black")
+    
+    # Add text inside the bubble
+    draw.text((bubble_x + 10, bubble_y + 10), wrapped_text, fill="black", font=font)
+    
+    image.save(output_path)
+
+def generate_comic(scenario):
+    print("Generating comic description...")
+    panels = generate_comic_description(scenario)
+    
+    for i, (desc, dialogue) in enumerate(panels[:2]):  # Generate only 1-2 panels
+        print(f"Generating image for Panel {i+1}...")
+        img = generate_comic_image(desc)
+        output_path = f"panel_{i+1}.png"
+        
+        if dialogue:
+            add_dialogue_to_image(img, dialogue, output_path)
+        else:
+            img.save(output_path)
+        
+        print(f"Panel {i+1} saved as {output_path}")
+
+if __name__ == "__main__":
+    scenario = "Two friends discuss their dreams under a starry night."
+    generate_comic(scenario)
